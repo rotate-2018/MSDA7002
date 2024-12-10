@@ -1,0 +1,540 @@
+---
+title: "MSDA7002 Group Project - Group5"
+author: 
+- "CHEN Ningxin 3036425141"
+- "HAN Yajun 3036425086"
+- "LI Yaru 3036423973"
+- "LIU Sheng 3036424496 "
+- "ZHAO Chenxuan 3036427620"
+- "ZHOU Junjie 3036427034"
+date: "2024-12-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Research Motivation
+
+## 1.1 Backgroud
+
+The global demographic structure is in the midst of an unprecedented major transformation, which has profound implications for the size and age structure of the world's population (Batini, Callen & McKibbin, 2006). Understanding and predicting women’s fertility behavior is of crucial importance for policymakers, sociologists, and economists.
+
+## 1.2 Research Questions
+
+This study focuses on the female population aged 15 to 49 in the United States in 1990, aiming to deeply explore the impact of a series of socioeconomic variables on their fertility behavior.\
+
+The choice of this specific research question is driven by the profound implications that changes in fertility rates have not only on family structures and societal development but also on labor markets (Bloom, Canning, & Sevilla, 2003), allocation of educational resources (Cleland & Wilson, 1987), and social security systems (United Nations, Department of Economic and Social Affairs, Population Division, 2017).
+
+## 1.2 Reasons for Country and Time Selection
+
+The United States' diverse social environment, varied immigrant populations, and notable disparities between urban and rural areas as well as among states offer rich opportunities for comparative and in-depth analysis. Furthermore, its large population provides a substantial sample of women of childbearing age, ensuring robust support for the research(Chu, S. & Fang, L., 2009).
+
+The selection of 1990 data is motivated by two key factors. First, this was the last U.S. Census to include detailed information on the number of children born to individuals. Second, because this period was the initial stage after the end of the Cold War, the global economic and social structures were undergoing profound transformations(Borjas, 1994). This historical context provides valuable insights into how economic prosperity, immigration trends, and social changes collectively influenced individual fertility decisions (Morgan & Taylor, 2006).
+
+## 1.3 Reasons for Model and Variable Selection
+
+The logistic regression method was chosen because it is well-suited for handling binary outcome variables and allows for the estimation of the probability effects of each predictor on the response variable (Long, 1997).\
+
+The response variable, "number of children," is categorized into high fertility (more than 2 children) and low fertility (2 or fewer children). This dichotomization simplifies the complex patterns of fertility and aligns with the concept of "replacement-level fertility" discussed in policy contexts, which posits that an average of two children per woman is necessary to maintain a stable population size (United Nations, Department of Economic and Social Affairs, Population Division, 2017). The categorization into high and low fertility rates allows researchers to focus on key factors influencing fertility decisions, thereby providing valuable insights for policymakers aiming to understand and address demographic challenges (Bongaarts, 2006; Lutz & Samir, 2010).\
+
+The selection of predictor variables is grounded in their potential influence on individual fertility decisions. For instance, urban residency status reflects the impact of living environment on fertility intentions (Bongaarts & Watkins, 1996); age, as a key indicator within the life course, directly affects a woman's reproductive window (Morgan & Taylor, 2006); international migration status involves the processes of cultural adaptation and how these affect family planning (Bean, Stevens, & Van Hook, 2001); educational attainment is typically associated with access to contraceptive knowledge and career aspirations (Cleland & Wilson, 1987); and homeownership status serves as an indicator of economic stability that can influence fertility choices (Gyourko, Linneman, & Wachter, 1996).\
+
+Stratifying by urban residency status reveals distinct mechanisms underlying fertility behavior in urban versus rural settings (Bongaarts & Watkins, 1996). Incorporating states as random intercepts in a hierarchical regression model captures state-level heterogeneity and unobserved factors (Raudenbush & Bryk, 2002). Including state area and state population size as contextual variables permits an assessment of how macro-geographical characteristics shape micro-level household decisions (Entwisle, Rindfuss, Guilkey, & Speert, 1996). Finally, modeling age as a random slope allows for variability in fertility tendencies across different age groups, thereby more accurately reflecting the age-fertility relationship proposed by life course theory (Elder Jr., 1998).
+
+## 1.4 Research Purpose
+
+We aim to capture a comprehensive picture of thesocioeconomic factors that shape women's fertility decisions. This approach not only enriches our understanding of the multifaceted nature of fertility but also provides a robust framework for examining how various dimensions of individuals' lives intersect to influence fertility behaviors.
+
+# 2. Data Processing
+
+## 2.1 Loading Packages
+
+-   We used a loop to ensure that all packages were installed
+-   But this did not rule out the problem of an installed package version being too low
+-   If an error occurs, please use install.packages() to update the corresponding package
+    -   Our team tested and found that the most common problem is that the **glue** package version is too low
+
+```{r, echo=FALSE, message=FALSE}
+# All packages
+packages <- c( "tidyverse", "dplyr", "summarytools", "GGally", "sjPlot", "broom", "performance", "lme4", "ggeffects", "gtsummary")
+
+# Install and Load all packages
+for (pkg in packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg)
+  }
+  library(pkg, character.only = TRUE)
+}
+```
+
+## 2.2 Importing
+
+-   Use the reading method provided by IPUMS.\
++ Due to the limitation of computer performance, we selected 2% of the original data as the sample.\
+-   Here we use a relative path(**'./data-raw/ipumsi_00005.xml'**) to read, please use getwd() to note the working directory setting.\
+-   The origin data looks like:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# NOTE: To load data, you must download both the extract's data and the DDI
+# and also set the working directory to the folder with these files (or change the path below).
+
+if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
+
+ddi <- read_ipums_ddi("./data-raw/ipumsi_00005.xml")
+data <- read_ipums_micro(ddi)
+data
+```
+
+## 2.3 Data preprocessing
+
+Since data processing requires the removal of null values, and null values in IPUMS data are special numbers, they are removed manually. Secondly, since the US1990A_CITY data is very old, the proportion of matching to specific cities is only 10%. Therefore, in order to ensure the effect of data processing, the **state** where it is located is used for stratified analysis. Finally, since the research topic is the number of births, the data mainly selects women of childbearing age.\
+
+-   In terms of education level, high school and above are defined as high;
+-   The number of births greater than 2 is defined as high;
+-   The Migrate value of 30 is defined as an international immigrant, while other numbers starting with 2 are domestic immigrants. Therefore, whether the value exceeds 20 is used as a criterion to distinguish the presence of international immigrants;
+-   The overall age range is set to 15-49 years old;
+-   In the original numerical situation of urban and rural variables, 1 represents rural areas, 2 represents cities, and minus 1 satisfies the 0-1 type;
+-   In the numerical context of house ownership, 1 represents yes and 2 represents no, which is also modified to 0-1 type;
+-   Finally, all categorical variables are converted to factor types.
+-   GEOLEV1 is a 6-digit numeric variable. In this data, it represents the state where the sample is located.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+filtered_data <- data %>%
+  filter(CHBORN != 99, 
+         #US1990A_CITY != 0,
+         AGE >= 15, AGE < 50,
+         MIGRATE5 != 0,
+         US1990A_EDUCREC != 0,
+         OWNERSHIP != 0)
+
+filtered_data <- filtered_data %>%
+  mutate(high_edu = ifelse(US1990A_EDUCREC >= 5, 1, 0),
+         CHBORN_high = if_else(CHBORN > 2, 1, 0),
+         migrate = ifelse(MIGRATE5 > 20, 1, 0),
+         US1990A_URBAN = US1990A_URBAN - 1,
+         OWNERSHIP = if_else(OWNERSHIP == 1,1,0))
+
+filtered_data[, c("US1990A_URBAN", "migrate", "high_edu", "OWNERSHIP", "GEOLEV1")] <- lapply(filtered_data[, c("US1990A_URBAN", "migrate", "high_edu", "OWNERSHIP", "GEOLEV1")],as.factor)
+```
+
+## 2.4 Descriptive statistics
+
+CHBORN's third quantile is 2, so it is reasonable to choose the number greater than **2** as the high fertility number.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Non-categorical variables
+descr(filtered_data[, c("CHBORN", "AGE")])
+```
+
+We can see that the proportion of immigrants in the sample is very small, and this variable may not fit well.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Categorical variables
+tbl_summary(filtered_data[, c("CHBORN_high","US1990A_URBAN","migrate", "high_edu", "OWNERSHIP")])
+```
+
+## 2.5 Creating geographic data table
+
+The original data contains geography-related variables. We first classify by GEOLEV1, and then save the corresponding AREAMOLLWGEO1 (area) and POPDENSGEO1 (population density).\
+
+-   Population density is not very meaningful, so we multiply it by area to get the population
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+g <- filtered_data %>%
+  group_by(GEOLEV1) %>%
+  summarise(AREA = first(AREAMOLLWGEO1),
+            POP = first(POPDENSGEO1) * AREA) %>%
+  ungroup()
+
+g
+```
+
+## 2.6 Summarising data
+
+We convert the individual-level data into grouped summary data, which reduces its complexity and makes it more suitable for logistic regression analysis.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+filtered_data <- filtered_data %>%
+  drop_na() %>%
+  group_by(AGE, GEOLEV1, US1990A_URBAN, migrate, high_edu, OWNERSHIP) %>%
+  summarise(n = n(),
+            CHBORN_high = sum(CHBORN_high), 
+            no_CHBORN_high = n - CHBORN_high)
+
+filtered_data
+```
+
+Then put geographic data together with pre-processed tables.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+filtered_data <- filtered_data %>%
+  left_join(g) %>%
+  ungroup() %>%
+  relocate(contains("CHBORN_high"))
+
+filtered_data
+```
+
+# 3. Fitting the model
+
+## 3.1 Multiple Models
+
+We select **US1990A_URBAN**(urban-rural) and **age** as core variables and gradually add other control variables into the model.
+
+• Y is the probability of high fertility (CHBORN_high)\
+• US1990A_URBAN: A binary variable indicating urban or rural residence(0:rural,1:urban)\
+• AGE: Age of the individual\
+• migrate: Migration status(0:non-migrant,1:migrant)\
+• high_edu: Higher education attainment(0:no higher education,1:Higher education)\
+• OWNERSHIP: homeownership status (0: Does not own a house, 1: Owns a house).\
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+m <- tibble(
+ eqn = c("cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN+ AGE ",
+ "cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN+ AGE + migrate",
+ "cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN+ AGE + migrate + high_edu",
+ "cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN+ AGE + migrate + high_edu + OWNERSHIP")
+ ) %>%
+ mutate(model = map(.x = eqn, .f = ~glm(formula = .x, data = filtered_data,family = binomial(link="logit"))))
+
+```
+
+### 3.1.1 Output
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+tab_model(m$model)
+```
+
+\
+From the table, the **migrate** variable shows consistently poor results, with high p-values (0.673 and 0.221), indicating a lack of statistical significance. Therefore, we may consider removing this variable in subsequent analyses if further tests confirm its minimal contribution to the model.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+ggcoef_compare(models = m$model, significance = NULL)
+```
+
+### 3.1.2 Model Evaluation
+
+-   **Fourth** model has lowest AIC. **Fourth** model has lowest BIC. **Fourth** model has highest Log likelihood.
+-   So we will choose the **fourth** model.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+m <- m %>%
+ mutate(model_stats = map(.x = model, .f = ~glance(.x)))
+
+m %>%
+ select(eqn, model_stats) %>%
+ unnest(cols = model_stats) %>%
+ select(eqn, logLik, AIC, BIC)
+
+```
+
+## 3.2 Groupwise Models
+
+We thought that urban and rural populations may respond differently to these variables, so we choose to perform regressions by **urban-rural** group.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+# To make the legend more intuitive, a column "urban_rural" is added
+u <- filtered_data %>%
+ mutate(urban_rural = ifelse(test = US1990A_URBAN == 1, yes = "urban", no = "rural")) %>%
+ group_nest(urban_rural) %>%
+ mutate(model = map(data, .f = ~glm(formula = cbind(CHBORN_high,no_CHBORN_high) ~ AGE + migrate + high_edu + OWNERSHIP, data = .x, family = binomial(link="logit"))))
+
+```
+
+### 3.2.1 Output
+
+-   It can be seen that there is a large gap between urban and rural populations in terms of **high_edu**(education level) and **OWNERSHIP**.
+-   Only rural population is not significant in terms of variables **migrate**.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+u %>%
+ select(urban_rural, model) %>%
+ deframe() %>%
+ ggcoef_compare(significance = NULL)
+```
+
+## 3.3 Logistic Regression Model
+
+-   We choose to remove the variable **migrate** from the fourth model due to its poor performance in the above model.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+m0 <- glm(formula =  cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN + AGE + high_edu + OWNERSHIP,
+            data = filtered_data,
+            family = binomial(link="logit"))
+```
+
+### 3.3.1 Output
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+summary(m0)
+```
+
+-   **Intercept** is -3.93（p\<0.001）: This means the probability of high fertility for this baseline group is **2%**. **But** this doesn't make sense, because an age of 0 doesn't make sense.
+-   **US1990A_URBAN**: Changing from a rural to urban household is associated with an expected **decrease** in the logit probability of high fertility of 0.37.
+-   **AGE**: Increasing the age by one year is associated with an expected **increase** in the logit probability of high fertility of 0.11.
+-   **high_edu**: Changing from lower education to higher education is associated with an expected **decrease** in the logit probability of high fertility of 0.92.
+-   **OWNERSHIP**：Changing from not owning a house to owning one is associated with an expected **decrease** in the logit probability of high fertility of 0.34.
+
+### 3.3.2 Residual Plots
+
+-   The distribution of residuals is relatively normal.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+par(mfrow = c(2, 2))
+plot(m0, ask = FALSE)
+```
+
+### 3.3.3 Multicollinearity
+
+-   Low VIF values suggest a **low** degree of multicollinearity among predictors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_collinearity(m0)
+```
+
+## 3.4 Model with Varying Intercepts
+
+-   We add a random intercept to m0 to control the variation between **state**.
+
+-   Using **AGE** directly will prompt *'Model is nearly unidentifiable: very large eigenvalue'*. To address this, AGE is standardized.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+m1 <- glmer(formula =  cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN + scale(AGE) + high_edu + OWNERSHIP + (1 | GEOLEV1),
+            data = filtered_data,
+            family = binomial(link="logit"))
+```
+
+### 3.4.1 Output
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+summary(m1)
+```
+
+-   **Intercept** is -0.32（p\<0.001）: This means that the probability of high fertility for this baseline group, rural women of average age with low education and no housing, is $e^{-0.32} ≈ 73\%$.
+-   **US1990A_URBAN**: Changing from a rural to urban household is associated with an expected **decrease** in the logit probability of high fertility of 0.34.
+-   **scale(AGE)**: Increasing the age by one standard deviation is associated with an expected **increase** in the logit probability of high fertility of 1.14.
+-   **high_edu**: Changing from lower education to higher education is associated with an expected **decrease** in the logit probability of high fertility of 0.94.
+-   **OWNERSHIP**：Changing from not owning a house to owning one is associated with an expected **decrease** in the logit probability of high fertility of 0.35.
+
+### 3.4.2 Residual Analysis
+
+-   Dots should be plotted along the line
+-   Only one state is unusual
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_model(m1, check = "reqq", residual_type = "normal")
+```
+
+-   We found an anomaly in 840049, which is **Utah**.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+random_eff_m1 = as.data.frame(ranef(m1))
+max_index_m1 <- which.max(random_eff_m1$condval)
+
+# Use the index to extract the corresponding data from the grp column
+max_name_m1 <- random_eff_m1$grp[max_index_m1]
+
+max_name_m1
+```
+
+The binned residual plots suggest more predictor variables, or rescaling of existing variables are required to control for the heterogeneity in the binned residual plots, in particular for low expected predicted probabilities of number of births by women.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+par(mfrow = c(1, 2))
+binned_residuals(m1) %>%
+ plot()
+
+```
+
+### 3.4.3 Multicollinearity
+
+-   Low VIF values suggest a **low** degree of multicollinearity among predictors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_collinearity(m1)
+```
+
+### 3.4.4 ICC
+
+-   **10.8%** of the total variability in female high fertility is attributable to differences within states.
+-   Reduces to **2.9%** when we account for differences in age, urban, education attainment and house ownership.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+performance::icc(m1)
+```
+
+### 3.4.5 Visualizing random effects
+
+-   Overall, the probability of women having more children **increases** with **age** in each state.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggeffects)
+ggpredict(model = m1, type = "random", terms = c("AGE", "GEOLEV1")) %>%
+ plot(show_ci = FALSE) +
+ scale_colour_viridis_d() +
+ guides(colour = "none")
+```
+
+## 3.5 Model with Contextual Vairables
+
+Add a non-varying term contextual variable for the size of the state (**area** and **population**)  + We tested that either or both of them were significant, and there was **no** interaction between them.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# In order to make the subsequent models converge
+# Perform log transformation and scale transformation on state population and state area.
+filtered_data$AREA =  scale(log(filtered_data$AREA))
+filtered_data$POP =  scale(log(filtered_data$POP))
+
+m2 <- glmer(formula =  cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN +scale(AGE) + high_edu + OWNERSHIP + AREA +POP + (1 | GEOLEV1),
+            data = filtered_data,
+            family = binomial(link="logit"))
+```
+
+### 3.5.1 Output
+
+-   Changing to a state with a **larger area** is associated with **increase** in the logit probability having high fertility.
+-   Changing to a state with a **more population** is associated with **decrease** in the logit probability having high fertility.
+-   The interpretation of other variables is similar to m1.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+summary(m2)
+```
+
+### 3.5.2 Residual Analysis
+
+-   We can still see that the outlier area is **Utah**.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_model(m2, check = "reqq", residual_type = "normal")
+
+random_eff_m2 = as.data.frame(ranef(m2))
+max_index_m2 <- which.max(random_eff_m2$condval)
+
+# Use the index to extract the corresponding data from the grp column
+max_name_m2 <- random_eff_m2$grp[max_index_m2]
+
+max_name_m2
+```
+
+-   Same as m1  \
+
+> The binned residual plots suggest more predictor variables, or rescaling of existing variables are required to control for the heterogeneity in the binned residual plots, in particular for low expected predicted probabilities of number of births by women.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+par(mfrow = c(1, 2))
+binned_residuals(m2) %>%
+ plot()
+
+```
+
+### 3.5.3 Multicollinearity
+
+-   Low VIF values suggest a **low** degree of multicollinearity among predictors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_collinearity(m2)
+```
+
+## 3.6 Model with Varying Slopes
+
+-   We think that the impact of age may vary in different regions.
+-   So we add a varying slope parameter based on the **AGE** variable to the model m2.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+m3 <- glmer(formula =  cbind(CHBORN_high,no_CHBORN_high) ~ US1990A_URBAN + scale(AGE) + high_edu + OWNERSHIP + AREA +POP + (scale(AGE) | GEOLEV1),
+            data = filtered_data,
+            family = binomial(link="logit"))
+```
+
+### 3.6.1 Output
+
+-   In approximately 95% of states the effect of increasing **age** by one standard deviation varies between $1.15 ± 1.96×0.07=(1.01,1.29)$
+-   The interpretation of other variables is similar to m1.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+summary(m3)
+```
+
+### 3.6.2 Residual Analysis
+
+-   **Utah** AGAIN...
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_model(m3, check = "reqq", residual_type = "normal")
+
+random_eff_m3 = as.data.frame(ranef(m3))
+max_index_m3 <- which.max(random_eff_m3$condval)
+
+# Use the index to extract the corresponding data from the grp column
+max_name_m3 <- random_eff_m3$grp[max_index_m3]
+
+max_name_m3
+```
+
+-   Same as m1 
+
+> The binned residual plots suggest more predictor variables, or rescaling of existing variables are required to control for the heterogeneity in the binned residual plots, in particular for low expected predicted probabilities of number of births by women.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+par(mfrow = c(1, 2))
+binned_residuals(m3) %>%
+ plot()
+
+```
+
+### 3.6.3 Multicollinearity
+
+-   Low VIF values suggest a **low** degree of multicollinearity among predictors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+check_collinearity(m3)
+```
+
+### 3.6.4 Visualizing random effects
+
+-   Overall, the probability of having more children **increases** with **age** in each state, and increases **faster** for women with **lower education levels**.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+ggpredict(model = m3, type = "random", terms = c("AGE", "GEOLEV1",  "high_edu"),colorAsFactor = TRUE) %>%
+  plot(show_ci = FALSE) +
+  scale_colour_viridis_d() +
+  guides(colour = "none") +
+  scale_y_continuous(labels = scales::percent)
+```
+
+# 4. Conclusion
+
+View panels of four models at once
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+tab_model(m0,m1,m2,m3, transform = NULL)
+```
+
+-   Our results show that **age** has a significant and clear **positive** effect on the number of births in all models, indicating that the increase in fertility is mainly due to increasing age.\
+-   **Living in cities** has a **negative** effect on fertility, indicating that rural residents are more willing to have children, which may be due to the traditional concept of having more children among rural residents or the lower cost of childbearing in rural areas.\
+-   **Higher education level** is associated with **lower** fertility rate, which may be because women with higher education level are more pursuing career success.\
+-   Interestingly, **owning own house** will **reduce** fertility rate. This may be similar to education level, because these women have higher incomes and more pursuits in life, and will not focus much on fertility.\
+    \
+-   By analyzing the urban and rural groups, we found that although both education level and house ownership have a **negative** impact on fertility, **urban** women are more sensitive to **education** level, while **rural** women are more sensitive to house **ownership**.
+
+# 5. Reference
+
+Batini, N., Callen, T., & McKibbin, W. J. (2006). The global impact of demographic change. *IMF Working Paper*, WP/06/9.\
+Bean, F. D., Stevens, G., & Van Hook, J. (2001). Race and immigration in America: Challenging the myth of decline. *Annual Review of Sociology*, 27, 67-92.\
+Bloom, D. E., Canning, D., & Sevilla, J. (2003). The demographic dividend: A new perspective on the economic consequences of population change. *Santa Monica, CA: RAND Corporation*.\
+Bongaarts, J. (2006). The causes of stalling fertility transitions. *Studies in Family Planning*, 37(1), 1-16.\
+Bongaarts, J., & Watkins, S. C. (1996). Social interactions and fertility transitions in developing countries. *Population and Development Review*, 22(Supplement), 27-48.\
+Borjas, G. J. (1994). *Immigration and welfare*, 1970-1990.\
+Chu, S., & Fang, L. (2009). The Development and Impact of the Demographic Situation in the United States. *American Studies Quarterly*, (4).\
+Cleland, J., & Wilson, C. (1987). Demand theories of the fertility transition: An iconoclastic view. *Population Studies*, 41(1), 5-30.\
+Elder Jr., G. H. (1998). The life course as developmental theory. *Child Development*, 69(1), 1-12.\
+Entwisle, B., Rindfuss, R. R., Guilkey, D. K., & Speert, A. P. (1996). Community context and contraceptive choice in the United States. *Demography*, 33(3), 303-318.\
+Gyourko, J., Linneman, P., & Wachter, S. (1996). Measuring the effects of housing price appreciation on homeownership rates. *Journal of Housing Economics*, 5(2), 147-163.\
+Long, J. S. (1997). *Regression models for categorical and limited dependent variables*. Sage Publications.\
+Lutz, W., & Samir, K. C. (2010). Dimensions of global population projections: What do we know about future population trends and structures? *Philosophical Transactions of the Royal Society B: Biological Sciences*, 365(1554), 2779-2791.\
+Morgan, S. P., & Taylor, M. G. (2006). Fertility and women's employment reconsidered: Evidence from the National Survey of Families and Households. *Demography*, 43(2), 299-324.\
+Raudenbush, S. W., & Bryk, A. S. (2002). *Hierarchical linear models: Applications and data analysis methods* (2nd ed.). Sage Publications.\
+United Nations, Department of Economic and Social Affairs, Population Division. (2017). *World Population Prospects: The 2017 Revision*. New York: United Nations.\
